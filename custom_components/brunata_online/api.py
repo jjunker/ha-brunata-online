@@ -13,6 +13,7 @@ from typing import Any
 import aiohttp
 from aiohttp import ClientResponse, ClientSession
 import async_timeout
+import requests
 
 from .const import (
     API_URL,
@@ -117,20 +118,15 @@ class BrunataOnlineAPI:
             _LOGGER.error("Error refreshing token: %s", err)
             return False
 
-    async def authenticate(self) -> dict[str, Any]:
-        """Authenticate using Azure B2C OAuth flow.
-        
-        This uses a synchronous requests approach for the B2C flow
-        similar to FordPass integration, as the flow involves multiple
-        redirects and cookie handling that's easier with requests.
-        """
-        _LOGGER.debug("Starting B2C authentication")
-        
-        # For now, we'll use aiohttp and implement the full flow
-        # In production, you might want to use requests in an executor
-        # like FordPass does for better compatibility
+    def authenticate(self) -> dict[str, Any]:
+        """Authenticate using Azure B2C OAuth flow with requests library."""
+        _LOGGER.debug("Starting B2C authentication using requests")
         
         try:
+            # Use requests library for better B2C compatibility
+            session = requests.Session()
+            session.headers.update(DEFAULT_HEADERS)
+            
             # Generate PKCE challenge
             code_verifier = base64.urlsafe_b64encode(os.urandom(40)).decode("utf-8")
             code_verifier = re.sub("[^a-zA-Z0-9]+", "", code_verifier)
@@ -151,30 +147,16 @@ class BrunataOnlineAPI:
 
             auth_url = f"{OAUTH2_BASE_URL}/{OAUTH2_PROFILE}/oauth2/v2.0/authorize"
             
-            async with async_timeout.timeout(TIMEOUT):
-                async with self._session.get(
-                    auth_url,
-                    params=auth_params,
-                    headers=DEFAULT_HEADERS,
-                    allow_redirects=True,
-                ) as response:
-                    html = await response.text()
+            response = session.get(auth_url, params=auth_params, allow_redirects=True, timeout=TIMEOUT)
+            html = response.text
 
-            # Step 2: Extract CSRF token and Transaction ID
-            csrf_token = None
-            transaction_id = None
+            # Step 2: Extract CSRF token and Transaction ID from HTML and cookies
+            csrf_token = session.cookies.get("x-ms-cpim-csrf")
             
-            # Look for CSRF token in cookies
-            for cookie in self._session.cookie_jar:
-                if cookie.key == "x-ms-cpim-csrf":
-                    csrf_token = cookie.value
-                    break
-
-            # Extract transaction ID from HTML
+            transaction_id = None
             match = re.search(r'var SETTINGS = (\{[^;]*\});', html)
             if match:
                 settings_json = match.group(1)
-                # Parse the settings to extract transId
                 trans_match = re.search(r'"transId":"([^"]+)"', settings_json)
                 if trans_match:
                     transaction_id = trans_match.group(1)
@@ -182,7 +164,7 @@ class BrunataOnlineAPI:
             if not csrf_token or not transaction_id:
                 raise BrunataAuthError("Failed to extract CSRF token or transaction ID")
 
-            _LOGGER.debug("Got CSRF token and transaction ID")
+            _LOGGER.info(f"Extracted authentication tokens")
 
             # Step 3: POST credentials
             login_data = {
@@ -192,11 +174,12 @@ class BrunataOnlineAPI:
             }
 
             login_headers = {
-                **DEFAULT_HEADERS,
-                "Referer": str(response.url),
-                "X-Csrf-Token": csrf_token,
+                "X-CSRF-TOKEN": csrf_token,
                 "X-Requested-With": "XMLHttpRequest",
-                "Content-Type": "application/x-www-form-urlencoded",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Origin": OAUTH2_BASE_URL,
+                "Referer": response.url,
+                "Accept": "application/json, text/javascript, */*; q=0.01",
             }
 
             login_params = {
@@ -204,17 +187,22 @@ class BrunataOnlineAPI:
                 "p": OAUTH2_PROFILE,
             }
 
-            async with async_timeout.timeout(TIMEOUT):
-                async with self._session.post(
-                    f"{OAUTH2_BASE_URL}/{OAUTH2_PROFILE}/SelfAsserted",
-                    params=login_params,
-                    data=login_data,
-                    headers=login_headers,
-                ) as login_response:
-                    if login_response.status != 200:
-                        raise BrunataAuthError(
-                            f"Login failed with status {login_response.status}"
-                        )
+            login_url = f"{OAUTH2_BASE_URL}/{OAUTH2_PROFILE}/SelfAsserted"
+            
+            login_response = session.post(
+                login_url,
+                params=login_params,
+                data=login_data,
+                headers=login_headers,
+                timeout=TIMEOUT
+            )
+
+            if login_response.status_code != 200:
+                raise BrunataAuthError(
+                    f"Login failed with status {login_response.status_code}: {login_response.text[:200]}"
+                )
+
+            _LOGGER.info("Credentials accepted")
 
             # Step 4: Get authorization code
             confirm_params = {
@@ -224,21 +212,23 @@ class BrunataOnlineAPI:
                 "p": OAUTH2_PROFILE,
             }
 
-            async with async_timeout.timeout(TIMEOUT):
-                async with self._session.get(
-                    f"{OAUTH2_BASE_URL}/{OAUTH2_PROFILE}/api/CombinedSigninAndSignup/confirmed",
-                    params=confirm_params,
-                    headers=DEFAULT_HEADERS,
-                    allow_redirects=False,
-                ) as confirm_response:
-                    if confirm_response.status not in (302, 303):
-                        raise BrunataAuthError(
-                            f"Confirmation failed with status {confirm_response.status}"
-                        )
-                    
-                    redirect_location = confirm_response.headers.get("Location", "")
-                    if not redirect_location.startswith(REDIRECT_URI):
-                        raise BrunataAuthError("Invalid redirect URL")
+            confirm_url = f"{OAUTH2_BASE_URL}/{OAUTH2_PROFILE}/api/CombinedSigninAndSignup/confirmed"
+            
+            confirm_response = session.get(
+                confirm_url,
+                params=confirm_params,
+                allow_redirects=False,
+                timeout=TIMEOUT
+            )
+
+            if confirm_response.status_code not in (302, 303):
+                raise BrunataAuthError(
+                    f"Confirmation failed with status {confirm_response.status_code}"
+                )
+                
+            redirect_location = confirm_response.headers.get("Location", "")
+            if not redirect_location.startswith(REDIRECT_URI):
+                raise BrunataAuthError("Invalid redirect URL")
 
             # Extract authorization code from redirect
             parsed = urllib.parse.urlparse(redirect_location)
@@ -248,7 +238,7 @@ class BrunataOnlineAPI:
             if not auth_code:
                 raise BrunataAuthError("Failed to get authorization code")
 
-            _LOGGER.debug("Got authorization code")
+            _LOGGER.info("Got authorization code")
 
             # Step 5: Exchange code for tokens
             token_data = {
@@ -259,19 +249,18 @@ class BrunataOnlineAPI:
                 "code_verifier": code_verifier,
             }
 
-            async with async_timeout.timeout(TIMEOUT):
-                async with self._session.post(
-                    f"{OAUTH2_URL}/token",
-                    data=token_data,
-                    headers=DEFAULT_HEADERS,
-                ) as token_response:
-                    if token_response.status != 200:
-                        error_text = await token_response.text()
-                        raise BrunataAuthError(
-                            f"Token exchange failed: {error_text}"
-                        )
+            token_response = session.post(
+                f"{OAUTH2_URL}/token",
+                data=token_data,
+                timeout=TIMEOUT
+            )
 
-                    tokens = await token_response.json()
+            if token_response.status_code != 200:
+                raise BrunataAuthError(
+                    f"Token exchange failed: {token_response.text}"
+                )
+
+            tokens = token_response.json()
 
             self._access_token = tokens["access_token"]
             self._refresh_token = tokens.get("refresh_token")
@@ -280,7 +269,7 @@ class BrunataOnlineAPI:
             _LOGGER.info("Authentication successful")
             return tokens
 
-        except aiohttp.ClientError as err:
+        except requests.exceptions.RequestException as err:
             raise BrunataAuthError(f"Network error during authentication: {err}")
         except Exception as err:
             raise BrunataAuthError(f"Authentication failed: {err}")

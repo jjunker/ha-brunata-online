@@ -28,8 +28,8 @@ async def validate_input(
         session=session,
     )
 
-    # Attempt to authenticate
-    tokens = await api.authenticate()
+    # Attempt to authenticate - run in executor since it uses requests
+    tokens = await hass.async_add_executor_job(api.authenticate)
 
     # Try to fetch meters to verify the connection works
     meters = await api.get_meters()

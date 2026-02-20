@@ -16,8 +16,8 @@ AUTH_URL = f"{API_BASE_URL}/online-auth-webservice/v1/rest/authorize"
 OAUTH2_PROFILE = "B2C_1_signin_username"
 OAUTH2_BASE_URL = "https://brunatab2cprod.b2clogin.com/brunatab2cprod.onmicrosoft.com"
 OAUTH2_URL = f"{OAUTH2_BASE_URL}/{OAUTH2_PROFILE}/oauth2/v2.0"
-CLIENT_ID = "e1d10965-78dc-4051-a1e5-251483e74d03"
-REDIRECT_URI = f"{API_BASE_URL}/auth-response"
+CLIENT_ID = "82770188-c92e-4d16-927d-a15c472eda55"
+REDIRECT_URI = f"{API_BASE_URL}/auth-redirect"
 
 # Default headers
 DEFAULT_HEADERS = {

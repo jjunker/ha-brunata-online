@@ -46,17 +46,28 @@ async def async_setup_entry(
                 )
             )
 
-        # Create sensors for consumption data
+        # Create individual sensors for each radiator/meter from consumption data
         consumption_data = coordinator.data.get("consumption", {})
         for consumption_key, consumption_info in consumption_data.items():
-            entities.append(
-                BrunataConsumptionSensor(
-                    coordinator,
-                    entry,
-                    consumption_key,
-                    consumption_info,
-                )
-            )
+            # Extract consumptionLines which contains individual meters
+            consumption_lines = consumption_info.get("consumptionLines", [])
+            
+            for line in consumption_lines:
+                meter_info = line.get("meter", {})
+                meter_id = meter_info.get("meterId")
+                placement = meter_info.get("placement", "Unknown")
+                
+                if meter_id:
+                    entities.append(
+                        BrunataRadiatorSensor(
+                            coordinator,
+                            entry,
+                            consumption_key,
+                            meter_id,
+                            placement,
+                            line,
+                        )
+                    )
 
     async_add_entities(entities)
 
@@ -98,35 +109,29 @@ class BrunataMeterSensor(CoordinatorEntity, SensorEntity):
             "model": "Online Portal",
         }
 
-    @property
-    def native_value(self) -> int | None:
-        """Return the state of the sensor."""
-        if self.coordinator.data:
-            meters = self.coordinator.data.get("meters", {})
-            meter_list = meters.get(self._meter_type, [])
-            return len(meter_list)
-        return None
 
-
-class BrunataConsumptionSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Brunata consumption sensor."""
+class BrunataRadiatorSensor(CoordinatorEntity, SensorEntity):
+    """Representation of a Brunata radiator/meter sensor."""
 
     def __init__(
         self,
         coordinator: BrunataDataUpdateCoordinator,
         entry: ConfigEntry,
         consumption_key: str,
-        consumption_info: dict[str, Any],
+        meter_id: int,
+        placement: str,
+        consumption_line: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._consumption_key = consumption_key
-        self._attr_name = f"Brunata Consumption {consumption_key}"
-        self._attr_unique_id = f"{entry.entry_id}_consumption_{consumption_key}"
-        self._attr_device_class = SensorDeviceClass.ENERGY
+        self._meter_id = meter_id
+        self._placement = placement
+        self._attr_name = f"Brunata {placement}"
+        self._attr_unique_id = f"{entry.entry_id}_radiator_{meter_id}"
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-        self._attr_icon = "mdi:counter"
+        self._attr_native_unit_of_measurement = "units"
+        self._attr_icon = "mdi:radiator"
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -146,15 +151,20 @@ class BrunataConsumptionSensor(CoordinatorEntity, SensorEntity):
             consumption_info = consumption_data.get(self._consumption_key)
             
             if consumption_info and "consumptionLines" in consumption_info:
-                # Sum up total consumption from all lines
-                total = 0
+                # Find this specific meter's consumption line
                 for line in consumption_info["consumptionLines"]:
-                    for value in line.get("consumptionValues", []):
-                        consumption = value.get("consumption")
-                        if consumption is not None:
-                            total += consumption
-                
-                return total if total > 0 else None
+                    meter_info = line.get("meter", {})
+                    if meter_info.get("meterId") == self._meter_id:
+                        # Sum up total consumption from all values (ignoring nulls)
+                        total = 0
+                        for value in line.get("consumptionValues", []):
+                            consumption = value.get("consumption")
+                            if consumption is not None:
+                                total += consumption
+                        
+                        # Apply the scale factor to convert to kWh
+                        scale = meter_info.get("scale", 1.0)
+                        return round(total * scale, 2) if total > 0 else 0
         
         return None
 
@@ -165,10 +175,30 @@ class BrunataConsumptionSensor(CoordinatorEntity, SensorEntity):
             consumption_data = self.coordinator.data.get("consumption", {})
             consumption_info = consumption_data.get(self._consumption_key)
             
-            if consumption_info:
-                return {
-                    "raw_data": consumption_info,
-                    "last_update": self.coordinator.data.get("last_update"),
-                }
+            if consumption_info and "consumptionLines" in consumption_info:
+                for line in consumption_info["consumptionLines"]:
+                    meter_info = line.get("meter", {})
+                    if meter_info.get("meterId") == self._meter_id:
+                        # Get latest non-null consumption value
+                        latest_consumption = None
+                        latest_date = None
+                        for value in reversed(line.get("consumptionValues", [])):
+                            if value.get("consumption") is not None:
+                                latest_consumption = value.get("consumption")
+                                latest_date = value.get("toDate")
+                                break
+                        
+                        return {
+                            "meter_id": meter_info.get("meterId"),
+                            "meter_number": meter_info.get("meterNo"),
+                            "placement": meter_info.get("placement"),
+                            "scale": meter_info.get("scale"),
+                            "meter_type": meter_info.get("meterType"),
+                            "mounting_date": meter_info.get("mountingDate"),
+                            "transmitting": meter_info.get("transmitting"),
+                            "latest_consumption": latest_consumption,
+                            "latest_date": latest_date,
+                            "last_update": self.coordinator.data.get("last_update"),
+                        }
         
         return {}
