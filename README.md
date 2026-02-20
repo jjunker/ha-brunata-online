@@ -9,7 +9,7 @@ A custom Home Assistant integration that connects to your Brunata Online portal 
 - ⚡ View electricity consumption
 - 🔄 Automatic updates every 15 minutes
 - 🔐 Secure Azure AD B2C authentication with automatic token refresh
-- 📊 Proper energy device classes for Home Assistant Energy dashboard
+- 📊 Heating allocation unit tracking for cost distribution
 - 🏢 Perfect for apartment buildings with Brunata metering systems
 
 ## Installation
@@ -50,18 +50,35 @@ The integration will authenticate using Azure AD B2C and securely store refresh 
 Once configured, the integration creates sensors for:
 
 ### Meter Count Sensors
-- **Heating Meters**: Number of heating allocation units
-- **Water Meters**: Number of water meters
-- **Electricity Meters**: Number of electricity meters
+- **sensor.brunata_heating_meters**: Number of heating allocation units
+- **sensor.brunata_water_meters**: Number of water meters
+- **sensor.brunata_electricity_meters**: Number of electricity meters
 
-### Consumption Sensors
-- **Monthly Consumption**: Energy usage tracked with proper kWh units
-- **Historical Data**: Access to consumption history via sensor attributes
+### Individual Radiator Sensors
 
-All consumption sensors support the Home Assistant Energy dashboard and have the following:
-- Device class: `energy`
+Each radiator/meter in your apartment gets its own sensor based on the placement name from Brunata:
+- **sensor.brunata_kitchen**
+- **sensor.brunata_living_room**
+- **sensor.brunata_bedroom**
+- **sensor.brunata_room_1**
+- **sensor.brunata_room_2**
+- etc.
+
+**Note**: Sensor names are derived from the placement field in your Brunata account. Names may vary (e.g., "Køkken", "Kitchen", "Stue", "Living room").
+
+Each radiator sensor provides:
+- **Total consumption in heating allocation units** (automatically scaled using meter-specific factors)
+- **Attributes**: meter_id, meter_number, placement, scale, latest_consumption, latest_date
+- **Daily consumption data** from the past 30 days
+
+**About Heating Allocation Units**: Brunata uses a proportional allocation system where radiators measure relative heating usage, not direct energy consumption. Each room's usage is scaled by factors like radiator size and location. These units are used to fairly distribute heating costs among residents.
+
+All consumption sensors have:
 - State class: `total_increasing`
-- Unit: `kWh`
+- Unit: `units`
+- Icon: `mdi:radiator`
+
+**Note**: These sensors track heating allocation units, not direct kWh energy consumption, so they won't work with the Home Assistant Energy dashboard. Use them for cost tracking and consumption monitoring instead.
 
 ## Dashboard Examples
 
@@ -71,66 +88,162 @@ All consumption sensors support the Home Assistant Energy dashboard and have the
 type: entities
 entities:
   - entity: sensor.brunata_heating_meters
-  - entity: sensor.brunata_consumption_heating_*
-    name: Heating Consumption
-  - entity: sensor.brunata_consumption_water_*
-    name: Water Consumption
-title: Brunata Consumption
+    name: Total Heating Meters
+  - entity: sensor.brunata_kitchen
+    name: Kitchen
+  - entity: sensor.brunata_living_room
+    name: Living Room
+  - entity: sensor.brunata_bedroom
+    name: Bedroom
+title: Brunata Radiators
 ```
 
-### Energy Dashboard Integration
+### All Radiators Overview
 
-The consumption sensors automatically appear in the Home Assistant Energy dashboard. To add them:
-
-1. Go to **Settings** → **Dashboards** → **Energy**
-2. Click **Add Consumption**
-3. Select your Brunata consumption sensors
-4. Configure the energy source as needed
+```yaml
+type: entities
+title: Heating by Room
+entities:
+  - type: custom:auto-entities
+    filter:
+      include:
+        - entity_id: sensor.brunata_*
+          not:
+            entity_id: "*_meters"
+    sort:
+      method: state
+      reverse: true
+```
 
 ### Gauge Card for Current Usage
 
 ```yaml
 type: gauge
-entity: sensor.brunata_consumption_heating_*
-name: Heating Usage
-unit: kWh
+entity: sensor.brunata_kitchen
+name: Kitchen Radiator
+unit: units
 min: 0
-max: 1000
+max: 100
+```
+
+### Bar Chart Card for All Rooms
+
+```yaml
+type: custom:bar-card
+entities:
+  - entity: sensor.brunata_kitchen
+    name: Kitchen
+  - entity: sensor.brunata_living_room
+    name: Living Room
+  - entity: sensor.brunata_bedroom
+    name: Bedroom
+  - entity: sensor.brunata_room_1
+    name: Room 1
+  - entity: sensor.brunata_room_2
+    name: Room 2
+title: Heating Distribution
+unit_of_measurement: units
+```
+
+## Understanding Heating Costs
+
+Brunata's heating allocation units represent your **proportional share** of the building's total heating cost. These aren't direct kWh measurements - they're weighted units that factor in radiator size, location, and usage patterns.
+
+### How Costs Are Calculated
+
+1. **Your total units** = Sum of all your radiator sensors
+2. **Building total units** = All units in the building (from your housing association)
+3. **Your heating cost** = (Your units ÷ Building total units) × Total monthly heating bill
+
+**Example**: If you used 150 units, the building total is 10,000 units, and the monthly heating bill is 50,000 DKK:
+- Your share: (150 ÷ 10,000) × 50,000 = 750 DKK
+
+### Cost Tracking Template
+
+Create a template sensor to estimate monthly costs:
+
+```yaml
+template:
+  - sensor:
+      - name: "Total Heating Units"
+        unit_of_measurement: "units"
+        state: >
+          {% set kitchen = states('sensor.brunata_kitchen') | float(0) %}
+          {% set living = states('sensor.brunata_living_room') | float(0) %}
+          {% set bedroom = states('sensor.brunata_bedroom') | float(0) %}
+          {{ (kitchen + living + bedroom) | round(2) }}
+        icon: mdi:radiator
+
+      - name: "Estimated Heating Cost"
+        unit_of_measurement: "DKK"
+        state: >
+          {% set my_units = states('sensor.total_heating_units') | float(0) %}
+          {% set building_units = 10000 %}  # Get from landlord
+          {% set monthly_bill = 50000 %}     # Get from landlord
+          {{ ((my_units / building_units) * monthly_bill) | round(2) }}
+        icon: mdi:currency-usd
 ```
 
 ## Automations
 
-### High Consumption Alert
+### High Consumption Alert for Specific Room
 
 ```yaml
 automation:
-  - alias: "Alert on high heating consumption"
+  - alias: "Alert on high kitchen heating"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.brunata_consumption_heating_*
-        above: 500
+        entity_id: sensor.brunata_kitchen
+        above: 50
     action:
       - service: notify.mobile_app
         data:
-          title: "High Heating Usage"
-          message: "Heating consumption has exceeded 500 kWh this month"
+          title: "High Kitchen Heating"
+          message: "Kitchen radiator consumption is unusually high: {{ states('sensor.brunata_kitchen') }} units"
 ```
 
-### Daily Consumption Report
+### Total Heating Consumption Report
 
 ```yaml
 automation:
-  - alias: "Daily consumption summary"
+  - alias: "Weekly heating summary"
     trigger:
       - platform: time
         at: "20:00:00"
+    condition:
+      - condition: time
+        weekday:
+          - sun
     action:
       - service: notify.mobile_app
         data:
-          title: "Today's Consumption"
+          title: "Weekly Heating Report"
           message: >
-            Heating: {{ states('sensor.brunata_consumption_heating_*') }} kWh
-            Water: {{ states('sensor.brunata_consumption_water_*') }} kWh
+            Kitchen: {{ states('sensor.brunata_kitchen') }} units
+            Living Room: {{ states('sensor.brunata_living_room') }} units
+            Bedroom: {{ states('sensor.brunata_bedroom') }} units
+            Total: {{ states('sensor.brunata_heating_meters') }} meters
+```
+
+### Detect Radiator Not Transmitting
+
+```yaml
+automation:
+  - alias: "Radiator transmission alert"
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.brunata_køkken
+          - sensor.brunata_stue
+          - sensor.brunata_soveværelse
+    condition:
+      - condition: template
+        value_template: "{{ state_attr(trigger.entity_id, 'transmitting') == false }}"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Radiator Issue"
+          message: "Radiator in {{ state_attr(trigger.entity_id, 'placement') }} is not transmitting data"
 ```
 
 ## Troubleshooting
@@ -163,9 +276,25 @@ This integration uses the Brunata Online REST API:
 
 ## Credits
 
-- Based on research from the [Home Assistant Community Forum](https://community.home-assistant.io/t/brunata-integration-api-based/595447)
-- Authentication flow inspired by YukiElectronics' initial work
-- Azure B2C implementation pattern from Home Assistant FordPass integration
+This integration was built with inspiration and patterns from several sources:
+
+- **Initial Research**: [Home Assistant Community Forum thread](https://community.home-assistant.io/t/brunata-integration-api-based/595447) by YukiElectronics and community contributors
+- **Azure B2C Authentication Pattern**: [FordPass Integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/fordpass) - Using synchronous `requests` library for B2C compatibility
+- **Integration Structure**: [VW CarNet](https://github.com/home-assistant/core/tree/dev/homeassistant/components/volkswagen_we_connect) and [Kia/Hyundai](https://github.com/Hyundai-Kia-Connect/kia_uvo) integrations for OAuth flow patterns
+- **Config Flow Patterns**: Home Assistant core integrations using OAuth 2.0 with PKCE
+
+### Technical Notes
+
+Azure AD B2C's aggressive anti-automation protection required special handling:
+- CSRF tokens and transaction IDs expire in seconds
+- Synchronous `requests.Session` maintains cookies better than `aiohttp` for rapid sequential requests
+- Token refresh is handled via Home Assistant's executor pattern for sync code in async context
+
+### Contributors
+
+- Jeppe Junker - Initial implementation
+- YukiElectronics - API discovery and community research
+- Home Assistant Community - Testing and feedback
 
 ## Support
 

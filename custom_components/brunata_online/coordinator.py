@@ -52,19 +52,19 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
 
                 data["meters"][meter_type_name].extend(allocation_units)
 
-                # Fetch consumption for each allocation unit (limit to avoid rate limits)
+                # Fetch consumption for each allocation unit
                 # Get current month data
                 now = datetime.now()
-                start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat() + ".000Z"
-                end_date = now.isoformat() + ".999Z"
+                start_date = now.replace(day=1, hour=0, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                end_date = now.strftime("%Y-%m-%dT%H:%M:%S.999Z")
 
-                for unit in allocation_units[:5]:  # Limit to first 5 units per type
+                for unit in allocation_units[:10]:  # Limit to first 10 units to avoid rate limits
                     try:
                         consumption = await self.api.get_consumption(
                             allocation_unit=unit,
                             start_date=start_date,
                             end_date=end_date,
-                            interval="M",
+                            interval="D",
                         )
                         
                         if consumption:

@@ -2,93 +2,167 @@
 
 This document contains various automation examples showing how to use the Brunata Online integration in your Home Assistant setup.
 
+**Note**: Replace room names like `kitchen`, `living_room`, `bedroom`, `room_1` with your actual room names from your Brunata setup. Sensor names are derived from the placement field in your Brunata account.
+
 ## Table of Contents
 
-- [Consumption Monitoring](#consumption-monitoring)
+- [Room-Specific Monitoring](#room-specific-monitoring)
+- [Total Consumption Monitoring](#total-consumption-monitoring)
 - [Cost Tracking](#cost-tracking)
 - [Energy Optimization](#energy-optimization)
 - [Notifications](#notifications)
 - [Climate Control Integration](#climate-control-integration)
 
-## Consumption Monitoring
+## Room-Specific Monitoring
 
-### Daily Consumption Alert
+### Individual Room High Consumption Alert
 
-Get notified if your heating consumption exceeds a threshold:
+Get notified if a specific room's heating exceeds a threshold:
 
 ```yaml
 automation:
-  - alias: "High heating consumption alert"
+  - alias: "High kitchen heating alert"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.brunata_consumption_heating_*
+        entity_id: sensor.brunata_kitchen
         above: 50
         for:
-          hours: 1
+          hours: 2
     action:
       - service: notify.mobile_app
         data:
-          title: "⚠️ High Heating Usage"
-          message: "Your heating consumption is {{ states('sensor.brunata_consumption_heating_*') }} kWh today"
+          title: "⚠️ High Kitchen Heating"
+          message: "Kitchen radiator consumption is {{ states('sensor.brunata_kitchen') }} units"
 
-  - alias: "High water consumption alert"
+  - alias: "Bedroom heating spike"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.brunata_consumption_water_*
-        above: 100
+        entity_id: sensor.brunata_bedroom
+        above: 30
     action:
       - service: notify.mobile_app
         data:
-          title: "💧 High Water Usage"
-          message: "Water consumption has reached {{ states('sensor.brunata_consumption_water_*') }} units"
+          title: "🛏️ Bedroom Heating Spike"
+          message: "Bedroom heating is unusually high: {{ states('sensor.brunata_bedroom') }} units"
 ```
+
+### All Rooms Comparison
+
+Monitor when one room uses significantly more than others:
+
+```yaml
+automation:
+  - alias: "Unbalanced heating usage"
+    trigger:
+      - platform: time_pattern
+        hours: "/6"
+    condition:
+      - condition: template
+        value_template: >
+          {% set kitchen = states('sensor.brunata_kitchen') | float %}
+          {% set living = states('sensor.brunata_living_room') | float %}
+          {% set bedroom = states('sensor.brunata_bedroom') | float %}
+          {{ (kitchen > living * 2) or (kitchen > bedroom * 2) }}
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "⚖️ Unbalanced Heating"
+          message: >
+            Kitchen: {{ states('sensor.brunata_kitchen') }} units
+            Living: {{ states('sensor.brunata_living_room') }} units
+            Bedroom: {{ states('sensor.brunata_bedroom') }} units
+```
+
+## Total Consumption Monitoring
 
 ### Weekly Consumption Summary
 
-Send a weekly report comparing consumption:
+Send a weekly report with all room breakdowns:
 
 ```yaml
 automation:
-  - alias: "Weekly consumption report"
+  - alias: "Weekly heating report"
     trigger:
       - platform: time
         at: "18:00:00"
-      - platform: template
-        value_template: "{{ now().weekday() == 6 }}"  # Sunday
+    condition:
+      - condition: time
+        weekday:
+          - sun
     action:
       - service: notify.mobile_app
         data:
-          title: "📊 Weekly Consumption Summary"
+          title: "📊 Weekly Heating Summary"
           message: |
-            Heating: {{ states('sensor.brunata_consumption_heating_*') }} kWh
-            Water: {{ states('sensor.brunata_consumption_water_*') }} units
-            Electricity: {{ states('sensor.brunata_consumption_electricity_*') }} kWh
+            Kitchen: {{ states('sensor.brunata_kitchen') }} units
+            Living Room: {{ states('sensor.brunata_living_room') }} units  
+            Bedroom: {{ states('sensor.brunata_bedroom') }} units
+            Room 1: {{ states('sensor.brunata_room_1') }} units
+            Room 2: {{ states('sensor.brunata_room_2') }} units
+            Total Meters: {{ states('sensor.brunata_heating_meters') }}
+```
+
+### Daily Consumption Change Detection
+
+Alert when today's consumption differs significantly from yesterday:
+
+```yaml
+automation:
+  - alias: "Heating consumption spike detected"
+    trigger:
+      - platform: state
+        entity_id: sensor.brunata_kitchen
+    condition:
+      - condition: template
+        value_template: >
+          {% set old = trigger.from_state.state | float(0) %}
+          {% set new = trigger.to_state.state | float(0) %}
+          {{ (new > old * 1.5) and (new - old > 10) }}
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "📈 Consumption Spike"
+          message: >
+            Kitchen heating jumped from {{ trigger.from_state.state }} to {{ trigger.to_state.state }} units
 ```
 
 ## Cost Tracking
 
-### Calculate Monthly Heating Costs
+### Calculate Total Heating Costs
 
-Create a template sensor to estimate costs:
+Create template sensors to estimate costs for all rooms:
 
 ```yaml
 template:
   - sensor:
-      - name: "Estimated Heating Cost"
+      - name: "Total Heating Cost"
         unit_of_measurement: "DKK"
         state: >
-          {% set consumption = states('sensor.brunata_consumption_heating_*') | float(0) %}
-          {% set price_per_kwh = 2.5 %}
-          {{ (consumption * price_per_kwh) | round(2) }}
+          {% set kitchen = states('sensor.brunata_kitchen') | float(0) %}
+          {% set living = states('sensor.brunata_living_room') | float(0) %}
+          {% set bedroom = states('sensor.brunata_bedroom') | float(0) %}
+          {% set room1 = states('sensor.brunata_room_1') | float(0) %}
+          {% set room2 = states('sensor.brunata_room_2') | float(0) %}
+          {% set total = kitchen + living + bedroom + room1 + room2 %}
+          {% set price_per_unit = 2.5 %}
+          {{ (total * price_per_unit) | round(2) }}
         icon: mdi:currency-usd
 
-      - name: "Estimated Water Cost"
+      - name: "Kitchen Heating Cost"
         unit_of_measurement: "DKK"
         state: >
-          {% set consumption = states('sensor.brunata_consumption_water_*') | float(0) %}
-          {% set price_per_unit = 0.5 %}
+          {% set consumption = states('sensor.brunata_kitchen') | float(0) %}
+          {% set price_per_unit = 2.5 %}
           {{ (consumption * price_per_unit) | round(2) }}
-        icon: mdi:water-outline
+        icon: mdi:radiator
+
+      - name: "Living Room Heating Cost"
+        unit_of_measurement: "DKK"
+        state: >
+          {% set consumption = states('sensor.brunata_living_room') | float(0) %}
+          {% set price_per_unit = 2.5 %}
+          {{ (consumption * price_per_unit) | round(2) }}
+        icon: mdi:sofa
 ```
 
 ### Budget Warning
@@ -100,15 +174,26 @@ automation:
   - alias: "Heating budget exceeded"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.estimated_heating_cost
+        entity_id: sensor.total_heating_cost
         above: 1000  # DKK
     action:
       - service: notify.mobile_app
         data:
           title: "💰 Budget Alert"
-          message: "Heating costs this month: {{ states('sensor.estimated_heating_cost') }} DKK"
+          message: "Total heating costs: {{ states('sensor.total_heating_cost') }} DKK"
           data:
             tag: "budget_alert"
+            
+  - alias: "Individual room cost alert"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.kitchen_heating_cost
+        above: 200
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "💰 Kitchen Heating Cost High"
+          message: "Kitchen heating alone is {{ states('sensor.kitchen_heating_cost') }} DKK this month"
 ```
 
 ## Energy Optimization

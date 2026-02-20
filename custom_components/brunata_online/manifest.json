@@ -8,6 +8,6 @@
   "integration_type": "device",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/jeppejunker/ha-brunata-online/issues",
-  "requirements": ["aiohttp>=3.9.0", "async-timeout>=4.0.3"],
+  "requirements": ["aiohttp>=3.9.0", "async-timeout>=4.0.3", "requests>=2.31.0"],
   "version": "0.1.0"
 }
