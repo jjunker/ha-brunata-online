@@ -20,7 +20,7 @@ A custom Home Assistant integration that connects to your Brunata Online portal 
 2. Go to "Integrations"
 3. Click the three dots in the top right corner
 4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/yourusername/ha-brunata-online`
+5. Add this repository URL: `https://github.com/jjunker/ha-brunata-online`
 6. Category: Integration
 7. Click "Add"
 8. Search for "Brunata Online"
@@ -169,7 +169,7 @@ This integration uses the Brunata Online REST API:
 
 ## Support
 
-For issues and feature requests, please use the [GitHub issue tracker](https://github.com/yourusername/ha-brunata-online/issues).
+For issues and feature requests, please use the [GitHub issue tracker](https://github.com/jjunker/ha-brunata-online/issues).
 
 ## License
 
