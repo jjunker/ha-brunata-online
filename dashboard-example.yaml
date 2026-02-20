@@ -1,0 +1,263 @@
+# Dashboard Card Examples for Brunata Online Integration
+# Copy these card configurations to your Home Assistant dashboard
+
+# ============================================================================
+# 1. Complete Consumption Overview
+# ============================================================================
+type: vertical-stack
+cards:
+  - type: markdown
+    content: |
+      ## 🏢 Brunata Consumption Dashboard
+      
+      Monitor your apartment's heating, water, and electricity usage from your building's Brunata metering system.
+  
+  - type: entities
+    title: Meter Count
+    entities:
+      - entity: sensor.brunata_heating_meters
+        name: 🌡️ Heating Meters
+        icon: mdi:radiator
+      - entity: sensor.brunata_water_meters
+        name: 💧 Water Meters
+        icon: mdi:water
+      - entity: sensor.brunata_electricity_meters
+        name: ⚡ Electricity Meters
+        icon: mdi:flash
+  
+  - type: horizontal-stack
+    cards:
+      - type: statistic
+        entity: sensor.brunata_consumption_heating_*
+        name: Heating
+        icon: mdi:radiator
+        stat_type: total
+        period: month
+      
+      - type: statistic
+        entity: sensor.brunata_consumption_water_*
+        name: Water
+        icon: mdi:water
+        stat_type: total
+        period: month
+      
+      - type: statistic
+        entity: sensor.brunata_consumption_electricity_*
+        name: Electricity
+        icon: mdi:flash
+        stat_type: total
+        period: month
+
+# ============================================================================
+# 2. Heating Consumption Focus Card
+# ============================================================================
+type: vertical-stack
+cards:
+  - type: gauge
+    entity: sensor.brunata_consumption_heating_*
+    name: Monthly Heating Usage
+    unit: kWh
+    min: 0
+    max: 500
+    needle: true
+    severity:
+      green: 0
+      yellow: 300
+      red: 400
+  
+  - type: history-graph
+    title: Heating Consumption History
+    entities:
+      - entity: sensor.brunata_consumption_heating_*
+    hours_to_show: 168  # 7 days
+
+# ============================================================================
+# 3. Compact Meter Status Card
+# ============================================================================
+type: glance
+entities:
+  - entity: sensor.brunata_heating_meters
+    name: Heating
+  - entity: sensor.brunata_water_meters
+    name: Water
+  - entity: sensor.brunata_electricity_meters
+    name: Electricity
+title: Brunata Meters
+show_name: true
+show_icon: true
+show_state: true
+
+# ============================================================================
+# 4. Energy Distribution Pie Chart (requires custom:apexcharts-card)
+# ============================================================================
+type: custom:apexcharts-card
+header:
+  show: true
+  title: Energy Consumption Distribution
+series:
+  - entity: sensor.brunata_consumption_heating_*
+    name: Heating
+    type: donut
+  - entity: sensor.brunata_consumption_water_*
+    name: Water
+    type: donut
+  - entity: sensor.brunata_consumption_electricity_*
+    name: Electricity
+    type: donut
+
+# ============================================================================
+# 5. Detailed Consumption Card with Attributes
+# ============================================================================
+type: entities
+title: Detailed Consumption Data
+entities:
+  - type: custom:fold-entity-row
+    head:
+      entity: sensor.brunata_consumption_heating_*
+      name: 🌡️ Heating Consumption
+    entities:
+      - type: attribute
+        entity: sensor.brunata_consumption_heating_*
+        attribute: last_update
+        name: Last Updated
+      - type: attribute
+        entity: sensor.brunata_consumption_heating_*
+        attribute: raw_data
+        name: Raw Data
+  
+  - type: custom:fold-entity-row
+    head:
+      entity: sensor.brunata_consumption_water_*
+      name: 💧 Water Consumption
+    entities:
+      - type: attribute
+        entity: sensor.brunata_consumption_water_*
+        attribute: last_update
+        name: Last Updated
+
+# ============================================================================
+# 6. Monthly Comparison Card (Markdown)
+# ============================================================================
+type: markdown
+content: |
+  ## 📊 Monthly Consumption
+  
+  {% set heating = states('sensor.brunata_consumption_heating_*') | float(0) %}
+  {% set water = states('sensor.brunata_consumption_water_*') | float(0) %}
+  {% set electricity = states('sensor.brunata_consumption_electricity_*') | float(0) %}
+  
+  ### Current Month
+  
+  | Meter Type | Consumption | Status |
+  |------------|-------------|--------|
+  | 🌡️ Heating | {{ heating | round(1) }} kWh | {% if heating > 400 %}🔴 High{% elif heating > 250 %}🟡 Medium{% else %}🟢 Low{% endif %} |
+  | 💧 Water | {{ water | round(1) }} units | {% if water > 150 %}🔴 High{% elif water > 100 %}🟡 Medium{% else %}🟢 Low{% endif %} |
+  | ⚡ Electricity | {{ electricity | round(1) }} kWh | {% if electricity > 300 %}🔴 High{% elif electricity > 200 %}🟡 Medium{% else %}🟢 Low{% endif %} |
+  
+  **Last Updated:** {{ relative_time(states.sensor.brunata_consumption_heating_*.last_updated) }}
+
+# ============================================================================
+# 7. Simple Consumption List
+# ============================================================================
+type: entities
+title: Current Consumption
+entities:
+  - entity: sensor.brunata_consumption_heating_*
+    name: Heating
+    icon: mdi:radiator
+    secondary_info: last-updated
+  - entity: sensor.brunata_consumption_water_*
+    name: Water
+    icon: mdi:water
+    secondary_info: last-updated
+  - entity: sensor.brunata_consumption_electricity_*
+    name: Electricity
+    icon: mdi:flash
+    secondary_info: last-updated
+
+# ============================================================================
+# 8. Cost Estimation Card (requires template sensors)
+# ============================================================================
+type: entities
+title: Estimated Monthly Costs
+entities:
+  - entity: sensor.estimated_heating_cost
+    name: Heating Cost
+    icon: mdi:currency-usd
+  - entity: sensor.estimated_water_cost
+    name: Water Cost
+    icon: mdi:currency-usd
+  - entity: sensor.estimated_electricity_cost
+    name: Electricity Cost
+    icon: mdi:currency-usd
+  - type: divider
+  - entity: sensor.total_estimated_cost
+    name: Total Estimated
+    icon: mdi:calculator
+
+# ============================================================================
+# 9. Mini Consumption Dashboard (All-in-One)
+# ============================================================================
+type: vertical-stack
+cards:
+  - type: markdown
+    content: |
+      ## 🏢 Brunata Online
+      {% set heating = states('sensor.brunata_consumption_heating_*') | float(0) %}
+      {% set water = states('sensor.brunata_consumption_water_*') | float(0) %}
+      {% set h_meters = states('sensor.brunata_heating_meters') | int(0) %}
+      {% set w_meters = states('sensor.brunata_water_meters') | int(0) %}
+      
+      **🌡️ Heating:** {{ heating | round(1) }} kWh ({{ h_meters }} meters)  
+      **💧 Water:** {{ water | round(1) }} units ({{ w_meters }} meters)
+      
+      <sub>Updated {{ relative_time(states.sensor.brunata_consumption_heating_*.last_updated) }}</sub>
+  
+  - type: horizontal-stack
+    cards:
+      - type: button
+        entity: sensor.brunata_consumption_heating_*
+        name: Heating
+        icon: mdi:radiator
+        tap_action:
+          action: more-info
+      - type: button
+        entity: sensor.brunata_consumption_water_*
+        name: Water
+        icon: mdi:water
+        tap_action:
+          action: more-info
+
+# ============================================================================
+# 10. Advanced History Card (requires history-graph)
+# ============================================================================
+type: history-graph
+title: 7-Day Consumption Trend
+entities:
+  - entity: sensor.brunata_consumption_heating_*
+    name: Heating
+  - entity: sensor.brunata_consumption_water_*
+    name: Water
+  - entity: sensor.brunata_consumption_electricity_*
+    name: Electricity
+hours_to_show: 168
+refresh_interval: 300
+
+# ============================================================================
+# Usage Instructions:
+# ============================================================================
+# 1. Replace all instances of '*' in entity IDs with your actual entity IDs
+#    Example: sensor.brunata_consumption_heating_* → sensor.brunata_consumption_heating_1
+#
+# 2. To find your exact entity IDs:
+#    - Go to Developer Tools → States
+#    - Search for "brunata"
+#    - Copy the full entity ID
+#
+# 3. Some cards require custom components:
+#    - apexcharts-card: For pie charts
+#    - fold-entity-row: For expandable rows
+#    Install these via HACS if needed
+#
+# 4. Template sensors for cost estimation need to be created in configuration.yaml
+#    (see AUTOMATION_EXAMPLES.md for templates)

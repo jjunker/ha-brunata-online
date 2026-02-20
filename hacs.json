@@ -1,0 +1,7 @@
+{
+  "name": "Brunata Online",
+  "render_readme": true,
+  "domains": ["sensor"],
+  "iot_class": "Cloud Polling",
+  "homeassistant": "2024.8.0"
+}
