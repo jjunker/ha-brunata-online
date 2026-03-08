@@ -278,9 +278,9 @@ This integration uses the Brunata Online REST API:
 
 This integration was built with inspiration and patterns from several sources:
 
-- **Initial Research**: [Home Assistant Community Forum thread](https://community.home-assistant.io/t/brunata-integration-api-based/595447) by YukiElectronics and community contributors
-- **Azure B2C Authentication Pattern**: [FordPass Integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/fordpass) - Using synchronous `requests` library for B2C compatibility
-- **Integration Structure**: [VW CarNet](https://github.com/home-assistant/core/tree/dev/homeassistant/components/volkswagen_we_connect) and [Kia/Hyundai](https://github.com/Hyundai-Kia-Connect/kia_uvo) integrations for OAuth flow patterns
+- **Initial Research**: [Home Assistant Community Forum thread](https://community.home-assistant.io/t/integrate-brunata-online-portal-for-hot-water-measurement/567337) by YukiElectronics and community contributors
+- **Azure B2C Authentication Pattern**: [FordPass Integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/fordpass) (Home Assistant core) - Using synchronous `requests` library for B2C compatibility
+- **Integration Structure**: [Volkswagen We Connect](https://github.com/home-assistant/core/tree/dev/homeassistant/components/volkswagen_we_connect) and [Hyundai Kia Connect](https://github.com/Hyundai-Kia-Connect/kia_uvo) integrations for OAuth flow patterns
 - **Config Flow Patterns**: Home Assistant core integrations using OAuth 2.0 with PKCE
 
 ### Technical Notes
