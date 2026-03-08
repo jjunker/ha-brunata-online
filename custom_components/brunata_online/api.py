@@ -10,8 +10,7 @@ import urllib.parse
 from datetime import datetime, timedelta
 from typing import Any
 
-import aiohttp
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientSession
 import async_timeout
 import requests
 from homeassistant.core import HomeAssistant
@@ -167,7 +166,7 @@ class BrunataOnlineAPI:
             if not csrf_token or not transaction_id:
                 raise BrunataAuthError("Failed to extract CSRF token or transaction ID")
 
-            _LOGGER.info(f"Extracted authentication tokens")
+            _LOGGER.info("Extracted authentication tokens")
 
             # Step 3: POST credentials
             login_data = {
@@ -205,7 +204,7 @@ class BrunataOnlineAPI:
                     f"Login failed with status {login_response.status_code}: {login_response.text[:200]}"
                 )
 
-            _LOGGER.info("Credentials accepted")
+            _LOGGER.debug("Credentials accepted")
 
             # Step 4: Get authorization code
             confirm_params = {
@@ -241,7 +240,7 @@ class BrunataOnlineAPI:
             if not auth_code:
                 raise BrunataAuthError("Failed to get authorization code")
 
-            _LOGGER.info("Got authorization code")
+            _LOGGER.debug("Got authorization code")
 
             # Step 5: Exchange code for tokens
             token_data = {
@@ -269,7 +268,7 @@ class BrunataOnlineAPI:
             self._refresh_token = tokens.get("refresh_token")
             self._token_expires_at = time.time() + tokens["expires_in"]
 
-            _LOGGER.info("Authentication successful")
+            _LOGGER.debug("Authentication successful")
             return tokens
 
         except requests.exceptions.RequestException as err:
