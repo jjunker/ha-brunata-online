@@ -14,6 +14,7 @@ import aiohttp
 from aiohttp import ClientResponse, ClientSession
 import async_timeout
 import requests
+from homeassistant.core import HomeAssistant
 
 from .const import (
     API_URL,
@@ -45,11 +46,13 @@ class BrunataOnlineAPI:
         username: str,
         password: str,
         session: ClientSession,
+        hass: HomeAssistant | None = None,
     ) -> None:
         """Initialize the API client."""
         self._username = username
         self._password = password
         self._session = session
+        self._hass = hass
         self._access_token = None
         self._refresh_token = None
         self._token_expires_at = None
@@ -282,9 +285,13 @@ class BrunataOnlineAPI:
         if self._refresh_token:
             if await self._refresh_access_token():
                 return
+            _LOGGER.warning("Refresh token expired, performing full re-authentication")
 
-        # Need full re-authentication
-        await self.authenticate()
+        # Need full re-authentication - authenticate() is sync, must run in executor
+        if self._hass:
+            await self._hass.async_add_executor_job(self.authenticate)
+        else:
+            raise BrunataAuthError("Cannot re-authenticate: hass not available")
 
     async def get_meters(self) -> dict[str, Any]:
         """Get all meters associated with the account."""
