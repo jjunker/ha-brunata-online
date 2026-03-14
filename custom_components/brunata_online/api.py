@@ -1,4 +1,5 @@
 """Brunata Online API Client."""
+import asyncio
 import base64
 import hashlib
 import json
@@ -10,10 +11,10 @@ import urllib.parse
 from datetime import datetime, timedelta
 from typing import Any
 
-import aiohttp
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientSession
 import async_timeout
 import requests
+from homeassistant.core import HomeAssistant
 
 from .const import (
     API_URL,
@@ -45,11 +46,13 @@ class BrunataOnlineAPI:
         username: str,
         password: str,
         session: ClientSession,
+        hass: HomeAssistant | None = None,
     ) -> None:
         """Initialize the API client."""
         self._username = username
         self._password = password
         self._session = session
+        self._hass = hass
         self._access_token = None
         self._refresh_token = None
         self._token_expires_at = None
@@ -164,7 +167,7 @@ class BrunataOnlineAPI:
             if not csrf_token or not transaction_id:
                 raise BrunataAuthError("Failed to extract CSRF token or transaction ID")
 
-            _LOGGER.info(f"Extracted authentication tokens")
+            _LOGGER.info("Extracted authentication tokens")
 
             # Step 3: POST credentials
             login_data = {
@@ -202,7 +205,7 @@ class BrunataOnlineAPI:
                     f"Login failed with status {login_response.status_code}: {login_response.text[:200]}"
                 )
 
-            _LOGGER.info("Credentials accepted")
+            _LOGGER.debug("Credentials accepted")
 
             # Step 4: Get authorization code
             confirm_params = {
@@ -238,7 +241,7 @@ class BrunataOnlineAPI:
             if not auth_code:
                 raise BrunataAuthError("Failed to get authorization code")
 
-            _LOGGER.info("Got authorization code")
+            _LOGGER.debug("Got authorization code")
 
             # Step 5: Exchange code for tokens
             token_data = {
@@ -266,7 +269,7 @@ class BrunataOnlineAPI:
             self._refresh_token = tokens.get("refresh_token")
             self._token_expires_at = time.time() + tokens["expires_in"]
 
-            _LOGGER.info("Authentication successful")
+            _LOGGER.debug("Authentication successful")
             return tokens
 
         except requests.exceptions.RequestException as err:
@@ -282,9 +285,13 @@ class BrunataOnlineAPI:
         if self._refresh_token:
             if await self._refresh_access_token():
                 return
+            _LOGGER.warning("Refresh token expired, performing full re-authentication")
 
-        # Need full re-authentication
-        await self.authenticate()
+        # Need full re-authentication - authenticate() is sync, must run in executor
+        if self._hass:
+            await self._hass.async_add_executor_job(self.authenticate)
+        else:
+            await asyncio.get_running_loop().run_in_executor(None, self.authenticate)
 
     async def get_meters(self) -> dict[str, Any]:
         """Get all meters associated with the account."""

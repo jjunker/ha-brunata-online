@@ -5,12 +5,10 @@ import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -42,7 +40,6 @@ async def async_setup_entry(
                     coordinator,
                     entry,
                     meter_type,
-                    len(meter_list),
                 )
             )
 
@@ -80,15 +77,21 @@ class BrunataMeterSensor(CoordinatorEntity, SensorEntity):
         coordinator: BrunataDataUpdateCoordinator,
         entry: ConfigEntry,
         meter_type: str,
-        meter_count: int,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._meter_type = meter_type
         self._attr_name = f"Brunata {meter_type} Meters"
         self._attr_unique_id = f"{entry.entry_id}_{meter_type}_meters"
-        self._attr_native_value = meter_count
         self._attr_icon = self._get_icon(meter_type)
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the number of meters of this type."""
+        if self.coordinator.data:
+            meter_list = self.coordinator.data.get("meters", {}).get(self._meter_type, [])
+            return len(meter_list)
+        return None
 
     def _get_icon(self, meter_type: str) -> str:
         """Get icon based on meter type."""
