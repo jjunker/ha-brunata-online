@@ -40,7 +40,6 @@ async def async_setup_entry(
                     coordinator,
                     entry,
                     meter_type,
-                    len(meter_list),
                 )
             )
 
@@ -78,7 +77,6 @@ class BrunataMeterSensor(CoordinatorEntity, SensorEntity):
         coordinator: BrunataDataUpdateCoordinator,
         entry: ConfigEntry,
         meter_type: str,
-        meter_count: int,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)

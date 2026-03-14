@@ -1,4 +1,5 @@
 """Brunata Online API Client."""
+import asyncio
 import base64
 import hashlib
 import json
@@ -290,7 +291,7 @@ class BrunataOnlineAPI:
         if self._hass:
             await self._hass.async_add_executor_job(self.authenticate)
         else:
-            raise BrunataAuthError("Cannot re-authenticate: hass not available")
+            await asyncio.get_running_loop().run_in_executor(None, self.authenticate)
 
     async def get_meters(self) -> dict[str, Any]:
         """Get all meters associated with the account."""

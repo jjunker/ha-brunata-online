@@ -1,5 +1,5 @@
 """Data update coordinator for Brunata Online."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any
 
@@ -54,7 +54,7 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Fetch consumption for each allocation unit
                 # Get current month data
-                now = datetime.now()
+                now = datetime.now(timezone.utc)
                 start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:%S.000Z")
                 end_date = now.strftime("%Y-%m-%dT%H:%M:%S.999Z")
 
