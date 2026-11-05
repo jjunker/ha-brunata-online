@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from aiohttp import ClientSession
-import async_timeout
 import requests
 from homeassistant.core import HomeAssistant
 
@@ -98,7 +97,7 @@ class BrunataOnlineAPI:
                 "client_id": CLIENT_ID,
             }
 
-            async with async_timeout.timeout(TIMEOUT):
+            async with asyncio.timeout(TIMEOUT):
                 async with self._session.post(
                     f"{OAUTH2_URL}/token",
                     data=data,
@@ -302,7 +301,7 @@ class BrunataOnlineAPI:
             "Authorization": f"Bearer {self._access_token}",
         }
 
-        async with async_timeout.timeout(TIMEOUT):
+        async with asyncio.timeout(TIMEOUT):
             async with self._session.get(
                 f"{API_URL}/consumer/superallocationunits",
                 headers=headers,
@@ -345,7 +344,7 @@ class BrunataOnlineAPI:
             "allocationunit": allocation_unit,
         }
 
-        async with async_timeout.timeout(TIMEOUT):
+        async with asyncio.timeout(TIMEOUT):
             async with self._session.get(
                 f"{API_URL}/consumer/consumption",
                 params=params,
