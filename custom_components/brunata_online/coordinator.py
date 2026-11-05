@@ -32,9 +32,20 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             # Get all meters
             meters_data = await self.api.get_meters()
 
+            # Latest reading per meter; this is the value the portal shows.
+            # The portal sends local midnight formatted as if it were UTC.
+            today = datetime.now().strftime("%Y-%m-%dT00:00:00.000Z")
+            readings_data = await self.api.get_meter_readings(today)
+
             data = {
                 "meters": {},
                 "consumption": {},
+                "readings": {
+                    item["meter"]["meterId"]: item
+                    for item in readings_data
+                    if item.get("meter", {}).get("meterId") is not None
+                    and item["meter"].get("allocationUnit") != "P"
+                },
                 "last_update": datetime.now().isoformat(),
             }
 
