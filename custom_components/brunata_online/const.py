@@ -11,11 +11,10 @@ CONF_TOKEN_EXPIRY = "token_expiry"
 
 # API Constants
 API_BASE_URL = "https://online.brunata.com"
-API_URL = f"{API_BASE_URL}/online-webservice/v1/rest"
-AUTH_URL = f"{API_BASE_URL}/online-auth-webservice/v1/rest/authorize"
-OAUTH2_PROFILE = "B2C_1_signin_username"
-OAUTH2_BASE_URL = "https://brunatab2cprod.b2clogin.com/brunatab2cprod.onmicrosoft.com"
-OAUTH2_URL = f"{OAUTH2_BASE_URL}/{OAUTH2_PROFILE}/oauth2/v2.0"
+API_URL = f"{API_BASE_URL}/online-webservice/v2/rest"
+# Login runs through Brunata's auth service, which fronts a Keycloak realm
+OAUTH_URL = f"{API_BASE_URL}/online-auth-webservice/v1/rest"
+OAUTH_SCOPE = "openid profile email"
 CLIENT_ID = "82770188-c92e-4d16-927d-a15c472eda55"
 REDIRECT_URI = f"{API_BASE_URL}/auth-redirect"
 
