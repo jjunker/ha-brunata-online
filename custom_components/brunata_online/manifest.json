@@ -1,7 +1,8 @@
 {
   "domain": "brunata_online",
   "name": "Brunata Online",
-  "codeowners": ["@jjunker"],
+  "categories": ["energy.meters_monitoring"],
+  "codeowners":["@jjunker"],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/jjunker/ha-brunata-online",
